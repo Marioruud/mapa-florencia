@@ -123,9 +123,9 @@ const lugares = [
 
 const etiquetas = { visita: "Visitar", comida: "Comer", practico: "Práctico" };
 const map = L.map('map', { zoomControl: true }).setView([43.7710, 11.2550], 14);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-  maxZoom: 20, subdomains: 'abcd',
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19,
+  attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors'
 }).addTo(map);
 
 const list = document.getElementById('poiList');
