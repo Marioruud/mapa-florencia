@@ -72,6 +72,24 @@
   .pin span { transform: rotate(45deg); color: #fff; font: 600 12px var(--body); }
   .pin.comida { background: #c98a1b; } .pin.practico { background: #3f6b8a; } .pin.done { background: #3d7a4a; }
   .me { width: 16px; height: 16px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(26,115,232,.25); }
+  #handle { display: none; }
+  /* ---- Móvil: mapa a pantalla completa + panel deslizable ---- */
+  @media (max-width: 767px) {
+    #mapWrap { position: fixed; inset: 0; min-height: 0; }
+    #sidebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; height: 92vh; height: 92dvh;
+               background: var(--bg); border: none; border-radius: 18px 18px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,.18);
+               padding-top: 0; padding-bottom: calc(24px + env(safe-area-inset-bottom));
+               transform: translateY(var(--sheet-y, 70%)); transition: transform .3s ease; overscroll-behavior: contain; }
+    #sidebar.dragging { transition: none; }
+    #sidebar[data-pos="min"] { --sheet-y: calc(100% - 150px); overflow: hidden; }
+    #sidebar[data-pos="mid"] { --sheet-y: 50%; }
+    #sidebar[data-pos="max"] { --sheet-y: 0%; }
+    #handle { display: block; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 0 8px;
+              margin: 0 -16px 4px; cursor: grab; touch-action: none; }
+    #handle::before { content: ""; display: block; width: 42px; height: 5px; border-radius: 9px; background: var(--line); margin: 0 auto; }
+    #locBtn { bottom: calc(160px + env(safe-area-inset-bottom)); }
+    h1 { font-size: 1.35rem; }
+  }
   @media (min-width: 768px) {
     body { flex-direction: row; }
     #sidebar { order: -1; width: 420px; height: 100%; border-top: none; border-right: 1px solid var(--line); }
@@ -79,7 +97,8 @@
 </style>
 </head>
 <body>
-<aside id="sidebar">
+<aside id="sidebar" data-pos="mid">
+  <div id="handle" role="button" aria-label="Subir o bajar la lista"></div>
   <h1 id="titulo"></h1>
   <p class="sub" id="subtitulo"></p>
   <div class="progress"><span id="progText"></span><div class="bar"><i id="progBar"></i></div></div>
@@ -169,7 +188,7 @@
     card.addEventListener('click', e => {
       if (e.target.closest('a,button')) return;
       document.querySelectorAll('.poi.active').forEach(c => c.classList.remove('active'));
-      card.classList.add('active'); map.flyTo([p.lat, p.lng], 16); marker.openPopup();
+      card.classList.add('active'); setSheet('min'); map.flyTo([p.lat, p.lng], 16); marker.openPopup();
     });
     return { p, marker, card };
   });
@@ -280,6 +299,44 @@
       if (primera) { map.flyTo([yo.lat, yo.lng], 16); render(); }
     }, () => { locBtn.textContent = 'Permiso de ubicación denegado'; }, { enableHighAccuracy: true });
   };
+
+  // ---- Panel deslizable (móvil) ----
+  function setSheet(pos) {
+    if (!movil()) return;
+    sheet.dataset.pos = pos; sheet.style.removeProperty('--sheet-y');
+    if (pos !== 'max') sheet.scrollTop = 0;
+  }
+  function movil() { return window.matchMedia('(max-width: 767px)').matches; }
+  const sheet = document.getElementById('sidebar');
+  const handle = document.getElementById('handle');
+  const orden = ['min', 'mid', 'max'];
+  let startY = 0, startPx = 0, moved = false;
+  const posPx = () => sheet.getBoundingClientRect().top - (window.innerHeight - sheet.offsetHeight);
+  handle.addEventListener('pointerdown', e => {
+    startY = e.clientY; startPx = posPx(); moved = false;
+    sheet.classList.add('dragging'); handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!sheet.classList.contains('dragging')) return;
+    const dy = e.clientY - startY; if (Math.abs(dy) > 5) moved = true;
+    const y = Math.min(Math.max(startPx + dy, 0), sheet.offsetHeight - 150);
+    sheet.style.setProperty('--sheet-y', y + 'px');
+  });
+  handle.addEventListener('pointerup', e => {
+    sheet.classList.remove('dragging');
+    if (!moved) { // toque: siguiente posición
+      const i = orden.indexOf(sheet.dataset.pos);
+      setSheet(i === 2 ? 'min' : orden[i + 1]); return;
+    }
+    const y = posPx(), h = sheet.offsetHeight;
+    const objetivos = { max: 0, mid: h * 0.5, min: h - 150 };
+    const vel = e.clientY - startY; // sesgo por dirección del gesto
+    let mejor = 'mid', d = Infinity;
+    for (const [k, v] of Object.entries(objetivos)) { const dd = Math.abs(y + vel * 0.3 - v); if (dd < d) { d = dd; mejor = k; } }
+    setSheet(mejor);
+  });
+  document.getElementById('search').addEventListener('focus', () => setSheet('max'));
+  map.on('dragstart', () => { if (sheet.dataset.pos === 'max') setSheet('mid'); });
 
   render(true);
   setTimeout(() => map.invalidateSize(), 300);
