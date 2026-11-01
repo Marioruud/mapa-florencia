@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Florencia: mis puntos de interés</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #faf7f4; --card: #ffffff; --fg: #2a2320; --muted: #6d625c;
+    --line: #e6dfd8; --accent: #a8432c; --note: #f4ede7; --gmaps: #1a73e8;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Source Sans 3", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1816; --card: #26201d; --fg: #f1e9e3; --muted: #b3a79f;
+            --line: #3a322e; --accent: #e07a5f; --note: #302823; --gmaps: #6aa5ff; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: var(--body); background: var(--bg); color: var(--fg);
+         display: flex; flex-direction: column; }
+  #map { flex: 1; min-height: 45vh; }
+  #sidebar { height: 55vh; overflow-y: auto; border-top: 1px solid var(--line);
+             padding: 20px max(16px, env(safe-area-inset-right)) 20px max(16px, env(safe-area-inset-left)); }
+  header { margin-bottom: 16px; }
+  h1 { font-family: var(--display); font-size: 1.6rem; line-height: 1.1; }
+  .sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 4px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg);
+          border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .82rem; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .poi { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+         padding: 14px; cursor: pointer; transition: border-color .15s; }
+  .poi:hover, .poi.active { border-color: var(--accent); }
+  .poi h3 { font-size: 1rem; display: flex; gap: 10px; align-items: baseline; }
+  .num { font-family: var(--display); color: var(--accent); min-width: 1.6em; }
+  .tag { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .note { margin-top: 8px; font-size: .88rem; line-height: 1.45; background: var(--note);
+          padding: 8px 10px; border-radius: 6px; white-space: pre-line; }
+  .gbtn { display: inline-block; margin-top: 10px; padding: 7px 12px; border-radius: 6px;
+          background: var(--gmaps); color: #fff; text-decoration: none; font-size: .82rem; font-weight: 600; }
+  .leaflet-popup-content { font-family: var(--body); max-width: 260px; }
+  .leaflet-popup-content .note { background: #f4ede7; color: #2a2320; }
+  .pin { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+         background: #a8432c; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+         display: grid; place-items: center; }
+  .pin span { transform: rotate(45deg); color: #fff; font: 600 12px var(--body); }
+  .pin.comida { background: #c98a1b; } .pin.practico { background: #3f6b8a; }
+  @media (min-width: 768px) {
+    body { flex-direction: row; }
+    #sidebar { order: -1; width: 400px; height: 100%; border-top: none; border-right: 1px solid var(--line); }
+    #map { height: 100%; }
+  }
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <header>
+    <h1>Florencia</h1>
+    <p class="sub">21 sitios con mis notas. Toca uno para verlo en el mapa.</p>
+    <div class="filters" id="filters">
+      <button class="chip" data-f="todos" aria-pressed="true">Todos</button>
+      <button class="chip" data-f="visita" aria-pressed="false">Visitar</button>
+      <button class="chip" data-f="comida" aria-pressed="false">Comer</button>
+      <button class="chip" data-f="practico" aria-pressed="false">Práctico</button>
+    </div>
+  </header>
+  <div class="list" id="poiList"></div>
+</aside>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ====== EDITA AQUÍ TUS LUGARES ======
+// tipo: "visita", "comida" o "practico"
+const lugares = [
+  { nombre: "Catedral de Santa María del Fiore", tipo: "visita", lat: 43.7731, lng: 11.2560, gmaps: "https://maps.app.goo.gl/XFkxbuwDgdZeCKQi8",
+    comentario: "No hay ascensor, así que prepárate para subir los 414 escalones hasta la cima del Campanario de Giotto." },
+  { nombre: "Basílica de Santa María Novella", tipo: "visita", lat: 43.7746, lng: 11.2494, gmaps: "https://maps.app.goo.gl/uTs6nyFEZkDVCq2ZA",
+    comentario: "Iglesia gótica, pinturas y frescos de Masaccio, Brunelleschi y Uccello." },
+  { nombre: "Basílica de Santa Croce", tipo: "visita", lat: 43.7687, lng: 11.2622, gmaps: "https://maps.app.goo.gl/JZdsqBLVvjR3PyxcA",
+    comentario: "Cuando estuve, entrar era de pago. Tumbas de Miguel Ángel, Galileo, Maquiavelo y Dante, junto con impresionantes frescos del siglo XIV de Giotto. (Lo que hicimos fue ir a una misa: a mi madre le hacía ilusión una misa en italiano.)" },
+  { nombre: "Basílica de San Lorenzo", tipo: "visita", lat: 43.7749, lng: 11.2538, gmaps: "https://maps.app.goo.gl/LnjABLtXaoqXZDg48",
+    comentario: "Decorada por Brunelleschi, Donatello y Miguel Ángel. Capillas Medici." },
+  { nombre: "Basílica de San Miniato al Monte", tipo: "visita", lat: 43.7598, lng: 11.2650, gmaps: "https://maps.app.goo.gl/3Q186pDT3StoDQuF9",
+    comentario: "Está en la cima de una colina fuera del centro (hay que caminar un poco, pero queda justo encima del Piazzale Michelangelo, donde todo el mundo se hace fotos). Desde arriba ves Florencia con vistas panorámicas y sin multitudes.\nDentro es un concepto distinto, y detrás está el cementerio de la ciudad (suena feo, pero merece la pena, en especial una estatua a tamaño real de dos hermanos que murieron en la Primera Guerra Mundial)." },
+  { nombre: "Basílica de Santa Trinita", tipo: "visita", lat: 43.7702, lng: 11.2519, gmaps: "https://maps.app.goo.gl/FJW7RvRaibc32hcb7",
+    comentario: "Del siglo XIV, una de las mejores iglesias de Florencia para los amantes del arte. Frescos renacentistas de Domenico Ghirlandaio." },
+  { nombre: "Basílica de la Santissima Annunziata", tipo: "visita", lat: 43.7774, lng: 11.2610, gmaps: "https://maps.app.goo.gl/7pXLyfGYUH5K98c36",
+    comentario: "Renacentista, única por sus claustros, inusualmente grandes. El Claustro de los Votos y el de los Muertos tienen obras y frescos fascinantes (una de las que más me sorprendió del viaje)." },
+  { nombre: "Galería de la Academia", tipo: "visita", lat: 43.7769, lng: 11.2587, gmaps: "https://maps.app.goo.gl/ZRY6RfAR5eSCaLjV7", comentario: "" },
+  { nombre: "Galería degli Uffizi", tipo: "visita", lat: 43.7678, lng: 11.2553, gmaps: "https://maps.app.goo.gl/Njw4L3eGMSUzYdwN7", comentario: "" },
+  { nombre: "Palacio Pitti", tipo: "visita", lat: 43.7651, lng: 11.2500, gmaps: "https://maps.app.goo.gl/7yiyQAWtWbEppcVM6",
+    comentario: "Si te sobra tiempo está interesante, pero tampoco es ninguna maravilla (humilde opinión)." },
+  { nombre: "Jardín de las Rosas", tipo: "visita", lat: 43.7628, lng: 11.2633, gmaps: "https://maps.app.goo.gl/pVcFDWbd2U94TsGv9",
+    comentario: "Buenas vistas de la ciudad y está de camino al Mirador Michelangelo." },
+  { nombre: "Mirador Michelangelo", tipo: "visita", lat: 43.7629, lng: 11.2651, gmaps: "https://maps.app.goo.gl/UBFvZbGQz2gtBGVk7",
+    comentario: "Confía y sube a San Miniato al Monte: son 15 minutos más andando y unas escaleras." },
+  { nombre: "Peretola Aeroporto (tranvía)", tipo: "practico", lat: 43.8086, lng: 11.2012, gmaps: "https://maps.app.goo.gl/mXJg6bYQT2rEWCg86",
+    comentario: "Ojo: hay dos líneas hasta el centro según adónde vayas. Cuidado sobre todo para volver al aeropuerto." },
+  { nombre: "Unità (tranvía)", tipo: "practico", lat: 43.7753, lng: 11.2514, gmaps: "https://maps.app.goo.gl/Dsau7ze3JN8u9cP99",
+    comentario: "Parada junto a la estación de tren, a 15 min andando de la Catedral." },
+  { nombre: "Mercado Central", tipo: "comida", lat: 43.7765, lng: 11.2531, gmaps: "https://maps.app.goo.gl/NZfDnwDZzSwEnrdZ9",
+    comentario: "Comida de la zona; viene bien si llegáis con hambre o queréis un café. Junto al mercado ponen puestos de imitaciones de bolsos y souvenirs." },
+  { nombre: "All’Antico Vinaio", tipo: "comida", lat: 43.7684, lng: 11.2570, gmaps: "https://maps.app.goo.gl/tc1oJRMoATKQ6XWW6",
+    comentario: "Típicos bocatas de fiambre. A mediodía es imposible; como en Europa cenan pronto, si estiráis la cena hay mucha menos gente." },
+  { nombre: "Vivoli", tipo: "comida", lat: 43.7697, lng: 11.2612, gmaps: "https://maps.app.goo.gl/QGNKyJsDj4Em6ode6",
+    comentario: "Su especialidad es el affogato: bola de gelato con un espresso caliente.\nMuy turístico, pero buena parada para cafeteros." },
+  { nombre: "Plaza de la Señoría", tipo: "visita", lat: 43.7696, lng: 11.2558, gmaps: "https://maps.app.goo.gl/Rm1wqcZgLiAR4Npo8",
+    comentario: "Un museo al aire libre por la cantidad de esculturas renacentistas y monumentos." },
+  { nombre: "Fontana del Porcellino", tipo: "visita", lat: 43.7692, lng: 11.2544, gmaps: "https://maps.app.goo.gl/bPjoMCoXeTU2J4EJ9",
+    comentario: "Ritual de buena suerte:\n1. Frota el hocico del jabalí (brilla de tantas manos).\n2. Pon una moneda en su boca y suéltala.\n3. Si cae por la reja de abajo, da buena suerte y volverás a Florencia." },
+  { nombre: "Sinagoga", tipo: "visita", lat: 43.7715, lng: 11.2662, gmaps: "https://maps.app.goo.gl/fhmunTxW9vLnxnJh8",
+    comentario: "Si os sobra tiempo, bonita por fuera. Dentro hay un museo de pago (yo entré porque nunca había estado en una sinagoga, pero no lo recomendaría por su belleza)." },
+  { nombre: "Guarda equipaje", tipo: "practico", lat: 43.7760, lng: 11.2485, gmaps: "https://maps.app.goo.gl/1d7VZJdD2x8oK7Ty5",
+    comentario: "Lo usé en mi último viaje sin ningún problema.\nPunto medio entre los sitios turísticos y el tranvía, para alargar el último día." }
+];
+// ====================================
+
+const etiquetas = { visita: "Visitar", comida: "Comer", practico: "Práctico" };
+const map = L.map('map', { zoomControl: true }).setView([43.7710, 11.2550], 14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  maxZoom: 20, subdomains: 'abcd',
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'
+}).addTo(map);
+
+const list = document.getElementById('poiList');
+const items = lugares.map((p, i) => {
+  const n = i + 1;
+  const note = p.comentario ? `<div class="note">${p.comentario}</div>` : '';
+  const btn = `<a class="gbtn" href="${p.gmaps}" target="_blank" rel="noopener">Abrir en Google Maps</a>`;
+  const icon = L.divIcon({ className: '', html: `<div class="pin ${p.tipo}"><span>${n}</span></div>`, iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -26] });
+  const marker = L.marker([p.lat, p.lng], { icon }).addTo(map)
+    .bindPopup(`<b>${n}. ${p.nombre}</b>${note}${btn}`);
+
+  const card = document.createElement('div');
+  card.className = 'poi';
+  card.innerHTML = `<h3><span class="num">${n}</span>${p.nombre}<span class="tag">${etiquetas[p.tipo]}</span></h3>${note}${btn}`;
+  card.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    document.querySelectorAll('.poi.active').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    map.flyTo([p.lat, p.lng], 16);
+    marker.openPopup();
+  });
+  list.appendChild(card);
+  return { p, marker, card };
+});
+
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b));
+  const f = b.dataset.f;
+  items.forEach(({ p, marker, card }) => {
+    const show = f === 'todos' || p.tipo === f;
+    card.hidden = !show;
+    show ? marker.addTo(map) : marker.remove();
+  });
+});
+
+const group = L.featureGroup(items.filter(x => x.p.tipo !== 'practico').map(x => x.marker));
+map.fitBounds(group.getBounds(), { padding: [30, 30] });
+setTimeout(() => map.invalidateSize(), 300);
+</script>
+</body>
+</html>
