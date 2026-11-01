@@ -3,168 +3,289 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Florencia: mis puntos de interés</title>
+<title>Guía de viaje</title>
+<meta name="theme-color" content="#a8432c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Source+Sans+3:wght@400;600&display=swap">
 <style>
   :root {
     --bg: #faf7f4; --card: #ffffff; --fg: #2a2320; --muted: #6d625c;
-    --line: #e6dfd8; --accent: #a8432c; --note: #f4ede7; --gmaps: #1a73e8;
+    --line: #e6dfd8; --accent: #a8432c; --note: #f4ede7; --info: #eef3f7; --gmaps: #1a73e8; --ok: #3d7a4a;
     --display: "Fraunces", Georgia, serif;
     --body: "Source Sans 3", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #1c1816; --card: #26201d; --fg: #f1e9e3; --muted: #b3a79f;
-            --line: #3a322e; --accent: #e07a5f; --note: #302823; --gmaps: #6aa5ff; color-scheme: dark; }
+    :root { --bg: #1c1816; --card: #26201d; --fg: #f1e9e3; --muted: #b3a79f; --line: #3a322e;
+            --accent: #e07a5f; --note: #302823; --info: #232a30; --gmaps: #6aa5ff; --ok: #7cc48b; color-scheme: dark; }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
-  body { font-family: var(--body); background: var(--bg); color: var(--fg);
-         display: flex; flex-direction: column; }
-  #map { flex: 1; min-height: 45vh; }
-  #sidebar { height: 55vh; overflow-y: auto; border-top: 1px solid var(--line);
-             padding: 20px max(16px, env(safe-area-inset-right)) 20px max(16px, env(safe-area-inset-left)); }
-  header { margin-bottom: 16px; }
+  body { font-family: var(--body); background: var(--bg); color: var(--fg); display: flex; flex-direction: column; }
+  #mapWrap { position: relative; flex: 1; min-height: 42vh; }
+  #map { position: absolute; inset: 0; }
+  #locBtn { position: absolute; z-index: 500; right: 10px; bottom: 24px; background: var(--card); color: var(--fg);
+            border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; font: 600 .85rem var(--body);
+            box-shadow: 0 2px 8px rgba(0,0,0,.2); cursor: pointer; }
+  #sidebar { height: 58vh; overflow-y: auto; border-top: 1px solid var(--line);
+             padding: 18px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }
   h1 { font-family: var(--display); font-size: 1.6rem; line-height: 1.1; }
   .sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
-  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 4px; }
-  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg);
-          border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .82rem; cursor: pointer; }
+  .progress { margin-top: 10px; font-size: .82rem; color: var(--muted); }
+  .bar { height: 5px; background: var(--line); border-radius: 9px; margin-top: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .3s; }
+  #search { width: 100%; margin-top: 12px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+            background: var(--card); color: var(--fg); font: inherit; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px;
+          padding: 5px 12px; font: inherit; font-size: .82rem; cursor: pointer; }
   .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; }
+  .dayhead h2 { font-family: var(--display); font-size: 1.05rem; }
+  .dayhead a { font-size: .8rem; color: var(--gmaps); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .dist { font-size: .8rem; color: var(--muted); margin-top: 2px; }
   .list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-  .poi { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-         padding: 14px; cursor: pointer; transition: border-color .15s; }
+  .poi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; cursor: pointer; transition: border-color .15s, opacity .2s; }
   .poi:hover, .poi.active { border-color: var(--accent); }
+  .poi.done { opacity: .6; }
+  .poi.done h3 .name { text-decoration: line-through; }
   .poi h3 { font-size: 1rem; display: flex; gap: 10px; align-items: baseline; }
   .num { font-family: var(--display); color: var(--accent); min-width: 1.6em; }
   .tag { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-left: auto; white-space: nowrap; }
-  .note { margin-top: 8px; font-size: .88rem; line-height: 1.45; background: var(--note);
-          padding: 8px 10px; border-radius: 6px; white-space: pre-line; }
-  .gbtn { display: inline-block; margin-top: 10px; padding: 7px 12px; border-radius: 6px;
-          background: var(--gmaps); color: #fff; text-decoration: none; font-size: .82rem; font-weight: 600; }
+  .meta { font-size: .78rem; color: var(--muted); margin-top: 4px; }
+  .photo { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; margin-top: 10px; }
+  .note { margin-top: 8px; font-size: .88rem; line-height: 1.45; background: var(--note); padding: 8px 10px; border-radius: 6px; white-space: pre-line; }
+  .info { margin-top: 8px; font-size: .84rem; line-height: 1.4; background: var(--info); padding: 7px 10px; border-radius: 6px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .btn { display: inline-block; padding: 7px 12px; border-radius: 6px; font: 600 .82rem var(--body); text-decoration: none; cursor: pointer; border: none; }
+  .btn.g { background: var(--gmaps); color: #fff; }
+  .btn.o { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .btn.check[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .empty { color: var(--muted); font-size: .9rem; padding: 12px 0; }
   .leaflet-popup-content { font-family: var(--body); max-width: 260px; }
   .leaflet-popup-content .note { background: #f4ede7; color: #2a2320; }
-  .pin { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
-         background: #a8432c; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
-         display: grid; place-items: center; }
+  .pin { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #a8432c;
+         border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); display: grid; place-items: center; }
   .pin span { transform: rotate(45deg); color: #fff; font: 600 12px var(--body); }
-  .pin.comida { background: #c98a1b; } .pin.practico { background: #3f6b8a; }
+  .pin.comida { background: #c98a1b; } .pin.practico { background: #3f6b8a; } .pin.done { background: #3d7a4a; }
+  .me { width: 16px; height: 16px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(26,115,232,.25); }
   @media (min-width: 768px) {
     body { flex-direction: row; }
-    #sidebar { order: -1; width: 400px; height: 100%; border-top: none; border-right: 1px solid var(--line); }
-    #map { height: 100%; }
+    #sidebar { order: -1; width: 420px; height: 100%; border-top: none; border-right: 1px solid var(--line); }
   }
 </style>
 </head>
 <body>
 <aside id="sidebar">
-  <header>
-    <h1>Florencia</h1>
-    <p class="sub">21 sitios con mis notas. Toca uno para verlo en el mapa.</p>
-    <div class="filters" id="filters">
-      <button class="chip" data-f="todos" aria-pressed="true">Todos</button>
-      <button class="chip" data-f="visita" aria-pressed="false">Visitar</button>
-      <button class="chip" data-f="comida" aria-pressed="false">Comer</button>
-      <button class="chip" data-f="practico" aria-pressed="false">Práctico</button>
-    </div>
-  </header>
+  <h1 id="titulo"></h1>
+  <p class="sub" id="subtitulo"></p>
+  <div class="progress"><span id="progText"></span><div class="bar"><i id="progBar"></i></div></div>
+  <input id="search" type="search" placeholder="Buscar un lugar…" autocomplete="off">
+  <div class="row" id="dayFilters"></div>
+  <div class="row" id="typeFilters">
+    <button class="chip" data-t="todos" aria-pressed="true">Todo</button>
+    <button class="chip" data-t="visita" aria-pressed="false">Visitar</button>
+    <button class="chip" data-t="comida" aria-pressed="false">Comer</button>
+    <button class="chip" data-t="practico" aria-pressed="false">Práctico</button>
+  </div>
+  <div id="dayInfo"></div>
   <div class="list" id="poiList"></div>
 </aside>
-<div id="map"></div>
+<div id="mapWrap">
+  <div id="map"></div>
+  <button id="locBtn" type="button">📍 Dónde estoy</button>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data.js"></script>
 <script>
-// ====== EDITA AQUÍ TUS LUGARES ======
-// tipo: "visita", "comida" o "practico"
-const lugares = [
-  { nombre: "Catedral de Santa María del Fiore", tipo: "visita", lat: 43.7731, lng: 11.2560, gmaps: "https://maps.app.goo.gl/XFkxbuwDgdZeCKQi8",
-    comentario: "No hay ascensor, así que prepárate para subir los 414 escalones hasta la cima del Campanario de Giotto." },
-  { nombre: "Basílica de Santa María Novella", tipo: "visita", lat: 43.7746, lng: 11.2494, gmaps: "https://maps.app.goo.gl/uTs6nyFEZkDVCq2ZA",
-    comentario: "Iglesia gótica, pinturas y frescos de Masaccio, Brunelleschi y Uccello." },
-  { nombre: "Basílica de Santa Croce", tipo: "visita", lat: 43.7687, lng: 11.2622, gmaps: "https://maps.app.goo.gl/JZdsqBLVvjR3PyxcA",
-    comentario: "Cuando estuve, entrar era de pago. Tumbas de Miguel Ángel, Galileo, Maquiavelo y Dante, junto con impresionantes frescos del siglo XIV de Giotto. (Lo que hicimos fue ir a una misa: a mi madre le hacía ilusión una misa en italiano.)" },
-  { nombre: "Basílica de San Lorenzo", tipo: "visita", lat: 43.7749, lng: 11.2538, gmaps: "https://maps.app.goo.gl/LnjABLtXaoqXZDg48",
-    comentario: "Decorada por Brunelleschi, Donatello y Miguel Ángel. Capillas Medici." },
-  { nombre: "Basílica de San Miniato al Monte", tipo: "visita", lat: 43.7598, lng: 11.2650, gmaps: "https://maps.app.goo.gl/3Q186pDT3StoDQuF9",
-    comentario: "Está en la cima de una colina fuera del centro (hay que caminar un poco, pero queda justo encima del Piazzale Michelangelo, donde todo el mundo se hace fotos). Desde arriba ves Florencia con vistas panorámicas y sin multitudes.\nDentro es un concepto distinto, y detrás está el cementerio de la ciudad (suena feo, pero merece la pena, en especial una estatua a tamaño real de dos hermanos que murieron en la Primera Guerra Mundial)." },
-  { nombre: "Basílica de Santa Trinita", tipo: "visita", lat: 43.7702, lng: 11.2519, gmaps: "https://maps.app.goo.gl/FJW7RvRaibc32hcb7",
-    comentario: "Del siglo XIV, una de las mejores iglesias de Florencia para los amantes del arte. Frescos renacentistas de Domenico Ghirlandaio." },
-  { nombre: "Basílica de la Santissima Annunziata", tipo: "visita", lat: 43.7774, lng: 11.2610, gmaps: "https://maps.app.goo.gl/7pXLyfGYUH5K98c36",
-    comentario: "Renacentista, única por sus claustros, inusualmente grandes. El Claustro de los Votos y el de los Muertos tienen obras y frescos fascinantes (una de las que más me sorprendió del viaje)." },
-  { nombre: "Galería de la Academia", tipo: "visita", lat: 43.7769, lng: 11.2587, gmaps: "https://maps.app.goo.gl/ZRY6RfAR5eSCaLjV7", comentario: "" },
-  { nombre: "Galería degli Uffizi", tipo: "visita", lat: 43.7678, lng: 11.2553, gmaps: "https://maps.app.goo.gl/Njw4L3eGMSUzYdwN7", comentario: "" },
-  { nombre: "Palacio Pitti", tipo: "visita", lat: 43.7651, lng: 11.2500, gmaps: "https://maps.app.goo.gl/7yiyQAWtWbEppcVM6",
-    comentario: "Si te sobra tiempo está interesante, pero tampoco es ninguna maravilla (humilde opinión)." },
-  { nombre: "Jardín de las Rosas", tipo: "visita", lat: 43.7628, lng: 11.2633, gmaps: "https://maps.app.goo.gl/pVcFDWbd2U94TsGv9",
-    comentario: "Buenas vistas de la ciudad y está de camino al Mirador Michelangelo." },
-  { nombre: "Mirador Michelangelo", tipo: "visita", lat: 43.7629, lng: 11.2651, gmaps: "https://maps.app.goo.gl/UBFvZbGQz2gtBGVk7",
-    comentario: "Confía y sube a San Miniato al Monte: son 15 minutos más andando y unas escaleras." },
-  { nombre: "Peretola Aeroporto (tranvía)", tipo: "practico", lat: 43.8086, lng: 11.2012, gmaps: "https://maps.app.goo.gl/mXJg6bYQT2rEWCg86",
-    comentario: "Ojo: hay dos líneas hasta el centro según adónde vayas. Cuidado sobre todo para volver al aeropuerto." },
-  { nombre: "Unità (tranvía)", tipo: "practico", lat: 43.7753, lng: 11.2514, gmaps: "https://maps.app.goo.gl/Dsau7ze3JN8u9cP99",
-    comentario: "Parada junto a la estación de tren, a 15 min andando de la Catedral." },
-  { nombre: "Mercado Central", tipo: "comida", lat: 43.7765, lng: 11.2531, gmaps: "https://maps.app.goo.gl/NZfDnwDZzSwEnrdZ9",
-    comentario: "Comida de la zona; viene bien si llegáis con hambre o queréis un café. Junto al mercado ponen puestos de imitaciones de bolsos y souvenirs." },
-  { nombre: "All’Antico Vinaio", tipo: "comida", lat: 43.7684, lng: 11.2570, gmaps: "https://maps.app.goo.gl/tc1oJRMoATKQ6XWW6",
-    comentario: "Típicos bocatas de fiambre. A mediodía es imposible; como en Europa cenan pronto, si estiráis la cena hay mucha menos gente." },
-  { nombre: "Vivoli", tipo: "comida", lat: 43.7697, lng: 11.2612, gmaps: "https://maps.app.goo.gl/QGNKyJsDj4Em6ode6",
-    comentario: "Su especialidad es el affogato: bola de gelato con un espresso caliente.\nMuy turístico, pero buena parada para cafeteros." },
-  { nombre: "Plaza de la Señoría", tipo: "visita", lat: 43.7696, lng: 11.2558, gmaps: "https://maps.app.goo.gl/Rm1wqcZgLiAR4Npo8",
-    comentario: "Un museo al aire libre por la cantidad de esculturas renacentistas y monumentos." },
-  { nombre: "Fontana del Porcellino", tipo: "visita", lat: 43.7692, lng: 11.2544, gmaps: "https://maps.app.goo.gl/bPjoMCoXeTU2J4EJ9",
-    comentario: "Ritual de buena suerte:\n1. Frota el hocico del jabalí (brilla de tantas manos).\n2. Pon una moneda en su boca y suéltala.\n3. Si cae por la reja de abajo, da buena suerte y volverás a Florencia." },
-  { nombre: "Sinagoga", tipo: "visita", lat: 43.7715, lng: 11.2662, gmaps: "https://maps.app.goo.gl/fhmunTxW9vLnxnJh8",
-    comentario: "Si os sobra tiempo, bonita por fuera. Dentro hay un museo de pago (yo entré porque nunca había estado en una sinagoga, pero no lo recomendaría por su belleza)." },
-  { nombre: "Guarda equipaje", tipo: "practico", lat: 43.7760, lng: 11.2485, gmaps: "https://maps.app.goo.gl/1d7VZJdD2x8oK7Ty5",
-    comentario: "Lo usé en mi último viaje sin ningún problema.\nPunto medio entre los sitios turísticos y el tranvía, para alargar el último día." }
-];
-// ====================================
+(async function () {
+  const G = window.GUIA;
+  const etiquetas = { visita: "Visitar", comida: "Comer", practico: "Práctico" };
+  document.title = "Guía de " + G.ciudad;
+  document.getElementById('titulo').textContent = G.ciudad;
+  document.getElementById('subtitulo').textContent = G.subtitulo;
 
-const etiquetas = { visita: "Visitar", comida: "Comer", practico: "Práctico" };
-const map = L.map('map', { zoomControl: true }).setView([43.7710, 11.2550], 14);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19,
-  attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors'
-}).addTo(map);
+  // ---- Datos: Google Sheet (opcional) o data.js ----
+  let lugares = G.lugares;
+  if (G.sheetCsv) {
+    try {
+      const txt = await (await fetch(G.sheetCsv)).text();
+      const rows = parseCSV(txt); const head = rows.shift().map(h => h.trim().toLowerCase());
+      lugares = rows.filter(r => r.length > 3).map(r => {
+        const o = {}; head.forEach((h, i) => o[h] = (r[i] || '').trim());
+        o.lat = +o.lat; o.lng = +o.lng; o.dia = +o.dia || 0; return o;
+      });
+    } catch (e) { console.warn('No se pudo leer la hoja, uso data.js', e); }
+  }
+  function parseCSV(t) {
+    const out = []; let row = [], cur = '', q = false;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (q) { if (c === '"' && t[i+1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cur); cur = ''; }
+      else if (c === '\n') { row.push(cur); out.push(row); row = []; cur = ''; }
+      else if (c !== '\r') cur += c;
+    }
+    if (cur || row.length) { row.push(cur); out.push(row); }
+    return out;
+  }
 
-const list = document.getElementById('poiList');
-const items = lugares.map((p, i) => {
-  const n = i + 1;
-  const note = p.comentario ? `<div class="note">${p.comentario}</div>` : '';
-  const btn = `<a class="gbtn" href="${p.gmaps}" target="_blank" rel="noopener">Abrir en Google Maps</a>`;
-  const icon = L.divIcon({ className: '', html: `<div class="pin ${p.tipo}"><span>${n}</span></div>`, iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -26] });
-  const marker = L.marker([p.lat, p.lng], { icon }).addTo(map)
-    .bindPopup(`<b>${n}. ${p.nombre}</b>${note}${btn}`);
+  // ---- Estado guardado (visitados) ----
+  const KEY = 'visitados-' + G.ciudad;
+  let visitados = new Set();
+  try { visitados = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...visitados])); } catch (e) {} };
 
-  const card = document.createElement('div');
-  card.className = 'poi';
-  card.innerHTML = `<h3><span class="num">${n}</span>${p.nombre}<span class="tag">${etiquetas[p.tipo]}</span></h3>${note}${btn}`;
-  card.addEventListener('click', e => {
-    if (e.target.closest('a')) return;
-    document.querySelectorAll('.poi.active').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-    map.flyTo([p.lat, p.lng], 16);
-    marker.openPopup();
+  // ---- Mapa ----
+  const map = L.map('map').setView(G.centro, 14);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors'
+  }).addTo(map);
+  const routeLayer = L.layerGroup().addTo(map);
+
+  let filtroDia = 'todos', filtroTipo = 'todos', texto = '', yo = null, yoMarker = null;
+
+  const dist = (a, b) => { // metros
+    const R = 6371000, r = x => x * Math.PI / 180;
+    const dLa = r(b.lat - a.lat), dLo = r(b.lng - a.lng);
+    const h = Math.sin(dLa/2)**2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLo/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  const fmt = m => m < 1000 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km';
+  const walk = m => Math.round(m * 1.3 / 80) + ' min a pie'; // 1.3 = calles no rectas, 80 m/min
+  const rutaUrl = p => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=walking`;
+
+  const items = lugares.map((p, i) => {
+    p.n = i + 1; p.id = p.nombre;
+    const marker = L.marker([p.lat, p.lng], { icon: icono(p) }).addTo(map);
+    marker.bindPopup(() => `<b>${p.n}. ${p.nombre}</b>${p.comentario ? `<div class="note">${p.comentario}</div>` : ''}
+      <div class="actions"><a class="btn g" href="${rutaUrl(p)}" target="_blank" rel="noopener">Cómo llegar</a></div>`);
+    const card = document.createElement('div'); card.className = 'poi';
+    card.addEventListener('click', e => {
+      if (e.target.closest('a,button')) return;
+      document.querySelectorAll('.poi.active').forEach(c => c.classList.remove('active'));
+      card.classList.add('active'); map.flyTo([p.lat, p.lng], 16); marker.openPopup();
+    });
+    return { p, marker, card };
   });
-  list.appendChild(card);
-  return { p, marker, card };
-});
 
-document.getElementById('filters').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b));
-  const f = b.dataset.f;
-  items.forEach(({ p, marker, card }) => {
-    const show = f === 'todos' || p.tipo === f;
-    card.hidden = !show;
-    show ? marker.addTo(map) : marker.remove();
+  function icono(p) {
+    const cls = visitados.has(p.id) ? 'done' : p.tipo;
+    return L.divIcon({ className: '', html: `<div class="pin ${cls}"><span>${p.n}</span></div>`, iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -26] });
+  }
+
+  function pintarCard({ p, card }) {
+    const hecho = visitados.has(p.id);
+    card.classList.toggle('done', hecho);
+    const meta = [];
+    if (p.dia && G.dias[p.dia]) meta.push(G.dias[p.dia].split('·')[0].trim());
+    if (yo) meta.push(fmt(dist(yo, p)) + ' de ti');
+    card.innerHTML = `
+      <h3><span class="num">${p.n}</span><span class="name">${p.nombre}</span><span class="tag">${etiquetas[p.tipo] || ''}</span></h3>
+      ${meta.length ? `<div class="meta">${meta.join(' · ')}</div>` : ''}
+      ${p.foto ? `<img class="photo" src="${p.foto}" alt="${p.nombre}" loading="lazy">` : ''}
+      ${p.comentario ? `<div class="note">${p.comentario}</div>` : ''}
+      ${p.info ? `<div class="info">ℹ️ ${p.info}</div>` : ''}
+      <div class="actions">
+        <a class="btn g" href="${rutaUrl(p)}" target="_blank" rel="noopener">Cómo llegar</a>
+        <a class="btn o" href="${p.gmaps}" target="_blank" rel="noopener">Ver en Google Maps</a>
+        <button class="btn o check" type="button" aria-pressed="${hecho}">${hecho ? '✓ Visitado' : 'Marcar visitado'}</button>
+      </div>`;
+    card.querySelector('.check').addEventListener('click', () => {
+      hecho ? visitados.delete(p.id) : visitados.add(p.id); save(); render();
+    });
+  }
+
+  // ---- Filtros por día ----
+  const dayBox = document.getElementById('dayFilters');
+  const dias = ['todos', ...Object.keys(G.dias)];
+  dias.forEach(d => {
+    const b = document.createElement('button'); b.className = 'chip'; b.dataset.d = d;
+    b.textContent = d === 'todos' ? 'Todos los días' : 'Día ' + d;
+    b.setAttribute('aria-pressed', d === filtroDia);
+    b.onclick = () => { filtroDia = d; dayBox.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b)); render(true); };
+    dayBox.appendChild(b);
   });
-});
+  document.getElementById('typeFilters').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return; filtroTipo = b.dataset.t;
+    document.querySelectorAll('#typeFilters .chip').forEach(c => c.setAttribute('aria-pressed', c === b)); render(true);
+  });
+  document.getElementById('search').addEventListener('input', e => { texto = e.target.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); render(); });
 
-const group = L.featureGroup(items.filter(x => x.p.tipo !== 'practico').map(x => x.marker));
-map.fitBounds(group.getBounds(), { padding: [30, 30] });
-setTimeout(() => map.invalidateSize(), 300);
+  // ---- Render ----
+  function render(encuadrar) {
+    const list = document.getElementById('poiList'); list.innerHTML = '';
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    let vis = items.filter(({ p }) =>
+      (filtroDia === 'todos' || String(p.dia) === filtroDia) &&
+      (filtroTipo === 'todos' || p.tipo === filtroTipo) &&
+      (!texto || norm(p.nombre + ' ' + p.comentario).includes(texto)));
+
+    if (yo && filtroDia === 'todos') vis = [...vis].sort((a, b) => dist(yo, a.p) - dist(yo, b.p));
+    else if (filtroDia !== 'todos') vis = ordenarRuta(vis);
+
+    items.forEach(it => { it.marker.setIcon(icono(it.p)); vis.includes(it) ? it.marker.addTo(map) : it.marker.remove(); });
+    vis.forEach(it => { pintarCard(it); list.appendChild(it.card); });
+    if (!vis.length) list.innerHTML = '<p class="empty">No hay lugares con estos filtros.</p>';
+
+    // Ruta del día
+    routeLayer.clearLayers();
+    const dayInfo = document.getElementById('dayInfo'); dayInfo.innerHTML = '';
+    if (filtroDia !== 'todos' && vis.length > 1) {
+      const pts = vis.map(x => [x.p.lat, x.p.lng]);
+      L.polyline(pts, { color: '#a8432c', weight: 4, opacity: .75, dashArray: '8 8' }).addTo(routeLayer);
+      let total = 0; for (let i = 1; i < vis.length; i++) total += dist(vis[i-1].p, vis[i].p);
+      const paradas = vis.map(x => `${x.p.lat},${x.p.lng}`);
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${paradas[0]}&destination=${paradas[paradas.length-1]}` +
+        (paradas.length > 2 ? `&waypoints=${paradas.slice(1, -1).slice(0, 9).join('|')}` : '') + '&travelmode=walking';
+      dayInfo.innerHTML = `<div class="dayhead"><h2>${G.dias[filtroDia]}</h2><a href="${url}" target="_blank" rel="noopener">Abrir ruta ↗</a></div>
+        <div class="dist">${vis.length} paradas · unos ${fmt(total * 1.3)} · ${walk(total)}</div>`;
+    }
+
+    const done = lugares.filter(p => visitados.has(p.id)).length;
+    document.getElementById('progText').textContent = `${done} de ${lugares.length} visitados`;
+    document.getElementById('progBar').style.width = (done / lugares.length * 100) + '%';
+
+    if (encuadrar && vis.length) map.fitBounds(L.latLngBounds(vis.map(x => [x.p.lat, x.p.lng])), { padding: [40, 40], maxZoom: 16 });
+  }
+
+  // Orden de ruta: vecino más cercano empezando por el más al norte
+  function ordenarRuta(arr) {
+    if (arr.length < 3) return arr;
+    const rest = [...arr].sort((a, b) => b.p.lat - a.p.lat); const out = [rest.shift()];
+    while (rest.length) {
+      const last = out[out.length - 1].p; let bi = 0;
+      rest.forEach((x, i) => { if (dist(last, x.p) < dist(last, rest[bi].p)) bi = i; });
+      out.push(rest.splice(bi, 1)[0]);
+    }
+    return out;
+  }
+
+  // ---- Dónde estoy ----
+  const locBtn = document.getElementById('locBtn');
+  locBtn.onclick = () => {
+    if (!navigator.geolocation) { locBtn.textContent = 'Ubicación no disponible'; return; }
+    locBtn.textContent = 'Buscando…';
+    navigator.geolocation.watchPosition(pos => {
+      yo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const primera = !yoMarker;
+      if (primera) yoMarker = L.marker([yo.lat, yo.lng], { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
+      else yoMarker.setLatLng([yo.lat, yo.lng]);
+      locBtn.textContent = '📍 Dónde estoy';
+      if (primera) { map.flyTo([yo.lat, yo.lng], 16); render(); }
+    }, () => { locBtn.textContent = 'Permiso de ubicación denegado'; }, { enableHighAccuracy: true });
+  };
+
+  render(true);
+  setTimeout(() => map.invalidateSize(), 300);
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
 </script>
 </body>
 </html>

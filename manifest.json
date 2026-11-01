@@ -1,0 +1,9 @@
+{
+  "name": "Guía de Florencia",
+  "short_name": "Florencia",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#faf7f4",
+  "theme_color": "#a8432c",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
