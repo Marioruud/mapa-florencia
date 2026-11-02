@@ -1,5 +1,5 @@
 // Guarda la app y los trozos de mapa vistos para usarla sin conexión
-const CACHE = 'guia-v3';
+const CACHE = 'guia-v5';
 const BASE = ['./', 'index.html', 'data.js', 'manifest.json', 'icon.svg',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting())); });
